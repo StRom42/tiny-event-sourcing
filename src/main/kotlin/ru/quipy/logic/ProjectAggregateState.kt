@@ -80,21 +80,20 @@ class ProjectAggregateState : AggregateState<UUID, ProjectAggregate> {
 
     @StateTransitionFunc
     fun taskStatusCreatedApply(event: TaskStatusCreatedEvent) {
-        val taskId = UUID.randomUUID()
-        taskStatuses[taskId] = TaskStatusEntity(taskId, event.statusName, event.statusColor)
+        taskStatuses[event.statusId] = TaskStatusEntity(event.statusId, event.statusName, event.statusColor)
         updatedAt = System.currentTimeMillis()
     }
 
     @StateTransitionFunc
     fun taskStatusSet(event: TaskStatusSetEvent) {
-        val taskStatus = taskStatuses.values.first { it.name == event.statusName }
+        val taskStatus = taskStatuses[event.statusId] ?: throw IllegalStateException()
         tasks[event.taskId]?.taskStatus = taskStatus
         updatedAt = System.currentTimeMillis()
     }
 
     @StateTransitionFunc
     fun taskStatusDeleted(event: TaskStatusDeletedEvent) {
-        val taskStatus = taskStatuses.values.first { it.name == event.statusName }
+        val taskStatus = taskStatuses[event.statusId] ?: throw IllegalStateException()
         taskStatuses.remove(taskStatus.id)
         updatedAt = System.currentTimeMillis()
     }

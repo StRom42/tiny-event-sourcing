@@ -25,7 +25,7 @@ data class CreateTaskStatusRequest(
 )
 
 data class SetTaskStatusRequest(
-    @JsonProperty("statusName") val statusName: String
+    @JsonProperty("statusId") val statusId: UUID
 )
 
 data class EditTaskNameRequest(
@@ -34,4 +34,27 @@ data class EditTaskNameRequest(
 
 data class SetTaskPerformerRequest(
     @JsonProperty("performerId") val performerId: UUID
+)
+
+data class TaskInfoProjection(
+    val taskId: UUID,
+    val taskTitle: String,
+    val status: Status,
+    val executors: List<UserProjection>,
+)
+
+data class Status(
+    val statusId: UUID? = null,
+    val statusName: String,
+    val statusColor: String
+) {
+
+    companion object {
+        val DEFAULT_STATUS = Status(null, "Default", "#FFFFFF")
+    }
+}
+
+data class ProjectProjection(
+    val projectId: UUID,
+    val projectTitle: String
 )

@@ -6,6 +6,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPat
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import ru.quipy.api.ProjectCreatedEvent
 import ru.quipy.api.TaskCreatedEvent
+import ru.quipy.api.TaskStatusCreatedEvent
 import ru.quipy.api.UserCreatedEvent
 import java.util.*
 
@@ -185,13 +186,16 @@ class ProjectComponentTests: AbstractSlowTest() {
         }
     """.trimIndent()
 
-        mockMvc.perform(
+        val createStatusResponse = mockMvc.perform(
             post("/projects/$projectId/statuses?userId=$userId")
                 .contentType("application/json")
                 .content(statusRequestBody)
         )
             .andExpect(status().isOk)
             .andReturn()
+
+        val statusId = objectMapper.readValue(createStatusResponse.response.contentAsString,
+            TaskStatusCreatedEvent::class.java).statusId
 
         val taskName = "Task-${UUID.randomUUID()}"
         val taskRequestBody = """
@@ -210,10 +214,9 @@ class ProjectComponentTests: AbstractSlowTest() {
             .andReturn()
 
         val taskId =  objectMapper.readValue(taskResponse.response.contentAsString, TaskCreatedEvent::class.java).taskId// taskId for the task being updated
-        val updatedStatus = "In Progress"
         val statusUpdateRequestBody = """
         {
-            "statusName": "$updatedStatus"
+            "statusId": "$statusId"
         }
     """.trimIndent()
 
@@ -223,7 +226,7 @@ class ProjectComponentTests: AbstractSlowTest() {
                 .content(statusUpdateRequestBody)
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.statusName").value(updatedStatus))
+            .andExpect(jsonPath("$.statusId").value(statusId.toString()))
     }
 
     @Test

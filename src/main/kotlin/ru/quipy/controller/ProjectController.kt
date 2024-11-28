@@ -1,10 +1,12 @@
 package ru.quipy.controller
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import org.springframework.web.bind.annotation.*
 import ru.quipy.api.*
 import ru.quipy.core.EventSourcingService
 import ru.quipy.logic.*
+import ru.quipy.projections.projects.ProjectInfoRepository
+import ru.quipy.projections.projects.ProjectParticipantsRepository
+import ru.quipy.projections.projects.TaskInfoRepository
 import java.util.*
 
 @RestController
@@ -12,6 +14,9 @@ import java.util.*
 class ProjectController(
     val projectEsService: EventSourcingService<UUID, ProjectAggregate, ProjectAggregateState>,
     val userEsService: EventSourcingService<UUID, UserAggregate, UserAggregateState>,
+    val taskInfoRepository: TaskInfoRepository,
+    val projectInfoRepository: ProjectInfoRepository,
+    val projectParticipantsRepository: ProjectParticipantsRepository
 ) {
 
     @PostMapping
@@ -23,11 +28,6 @@ class ProjectController(
         require(user != null) { "Пользователь должен существовать" }
 
         return projectEsService.create { it.create(request.projectTitle, creatorId) }
-    }
-
-    @GetMapping("/{projectId}")
-    fun getProject(@PathVariable projectId: UUID): ProjectAggregateState? {
-        return projectEsService.getState(projectId)
     }
 
     @PostMapping("/{projectId}/participants")
@@ -97,21 +97,21 @@ class ProjectController(
         require(user != null) { "Пользователь должен существовать" }
 
         return projectEsService.update(projectId) {
-            it.taskStatusSetEvent(taskId, request.statusName, userId)
+            it.taskStatusSetEvent(taskId, request.statusId, userId)
         }
     }
 
     @DeleteMapping("/{projectId}/statuses/{statusName}")
     fun deleteTaskStatus(
         @PathVariable projectId: UUID,
-        @PathVariable statusName: String,
+        @PathVariable statusId: UUID,
         @RequestParam userId: UUID
     ): TaskStatusDeletedEvent {
         val user = userEsService.getState(userId)
         require(user != null) { "Пользователь должен существовать" }
 
         return projectEsService.update(projectId) {
-            it.taskStatusDeletedEvent(statusName, userId)
+            it.taskStatusDeletedEvent(statusId, userId)
         }
     }
 
@@ -173,4 +173,43 @@ class ProjectController(
             it.taskDeletedEvent(taskId, userId)
         }
     }
+
+    @GetMapping("/{projectId}")
+    fun getProject(@PathVariable projectId: UUID): ProjectAggregateState? {
+        return projectEsService.getState(projectId)
+    }
+
+    @GetMapping("")
+    fun getAllProjectsByUser(@RequestParam(required = false) userId: UUID? = null): List<ProjectProjection> {
+        return (userId?.let { projectParticipantsRepository.findProjectsByUserId(it) }
+            ?: projectInfoRepository.findAll())
+            .map { ProjectProjection(it.projectId, it.projectTitle) }
+    }
+
+    @GetMapping("/{projectId}/tasks")
+    fun getTaskInfo(
+        @PathVariable projectId: UUID,
+        @RequestParam(required = false) taskTitle: String? = null
+    ): List<TaskInfoProjection> {
+        val projectStatuses = taskInfoRepository.findAllProjectStatuses(projectId)
+            .associateBy { it.statusId }
+        val participants = projectParticipantsRepository.findParticipantsByProjectId(projectId)
+            .associateBy { it.userId }
+        return (taskTitle?.let { taskInfoRepository.findByTaskName(projectId, it) }
+            ?: taskInfoRepository.findAll(projectId))
+            .map { (taskInfo, executors) ->
+                TaskInfoProjection(
+                    taskId = taskInfo.taskId,
+                    taskTitle = taskInfo.taskName,
+                    status = projectStatuses[taskInfo.projectId]
+                        ?.let { Status(it.statusId, it.statusName, it.hexColor) }
+                        ?: Status.DEFAULT_STATUS,
+                    executors = executors
+                        .filter { participants.containsKey(it.userId) }
+                        .mapNotNull { participants[it.userId] }
+                        .map { UserProjection(it.name, it.nickname, it.userId) }
+                )
+            }
+    }
+
 }

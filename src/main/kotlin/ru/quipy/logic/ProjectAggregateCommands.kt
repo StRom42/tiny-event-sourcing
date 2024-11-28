@@ -20,6 +20,7 @@ fun ProjectAggregateState.addParticipant(userId: UUID): ProjectParticipantAddedE
 
     return ProjectParticipantAddedEvent(
         userId = userId,
+        projectId = getId()
     )
 }
 
@@ -27,6 +28,7 @@ fun ProjectAggregateState.nameEdited(newProjectName: String, userId: UUID): Proj
     require(ownerId == userId) { "Пользователь должен быть владельцем проекта" }
 
     return ProjectNameEditedEvent(
+        projectId = getId(),
         newProjectName = newProjectName,
     )
 }
@@ -41,6 +43,8 @@ fun ProjectAggregateState.taskStatusCreatedEvent(
     require(!taskStatuses.values.any { it.name == statusName }) { "Статус $statusName уже существует в проекте" }
 
     return TaskStatusCreatedEvent(
+        statusId = UUID.randomUUID(),
+        projectId = getId(),
         statusColor = statusColor,
         statusName = statusName
     )
@@ -49,28 +53,28 @@ fun ProjectAggregateState.taskStatusCreatedEvent(
 
 fun ProjectAggregateState.taskStatusSetEvent(
     taskId: UUID,
-    statusName: String,
+    statusId: UUID,
     userId: UUID
 ): TaskStatusSetEvent {
     require(participants.contains(userId)) { "Пользователь должен быть участником проекта" }
-    require(taskStatuses.values.any { it.name == statusName }) { "Статус $statusName должен существовать в проекте" }
+    require(taskStatuses.contains(statusId)) { "Статус с id = $statusId должен существовать в проекте" }
 
     return TaskStatusSetEvent(
         taskId = taskId,
-        statusName = statusName
+        statusId = statusId
     )
 }
 
 fun ProjectAggregateState.taskStatusDeletedEvent(
-    statusName: String,
+    statusId: UUID,
     userId: UUID
 ): TaskStatusDeletedEvent {
     require(participants.contains(userId)) { "Пользователь должен быть участником проекта" }
-    require(tasks.none { it.value.taskStatus.name == statusName }) { "Задач с данным статусом не должно быть" }
-    require(statusName != TaskStatusEntity.DEFAULT_TASK_STATUS_NAME) { "Статус ${TaskStatusEntity.DEFAULT_TASK_STATUS_NAME} не может быть удален" }
+    require(tasks.none { it.value.taskStatus.id == statusId }) { "Задач с данным статусом не должно быть" }
+    require(taskStatuses.contains(statusId)) { "Статус с данным идентификатором должен присутствовать" }
 
     return TaskStatusDeletedEvent(
-        statusName = statusName
+        statusId = statusId
     )
 }
 
@@ -121,6 +125,7 @@ fun ProjectAggregateState.addTask(name: String, userId: UUID): TaskCreatedEvent 
     require(participants.contains(userId)) { "Пользователь должен быть участником проекта" }
 
     return TaskCreatedEvent(
+        projectId = getId(),
         taskId = UUID.nameUUIDFromBytes(name.toByteArray()),
         taskName = name
     )
